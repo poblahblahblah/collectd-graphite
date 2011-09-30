@@ -101,7 +101,7 @@ This may also occur on other operating systems. It is caused by a libtool/libltd
 CONFIGURATION
 -------------
 
-Add the following to your collectd.conf:
+For direct to graphite add the following to your collectd.conf:
 
 	<LoadPlugin "perl">
 		Globals true
@@ -118,6 +118,26 @@ Add the following to your collectd.conf:
 		  Port   "2003"
 		</Plugin>
 	</Plugin>
+
+For sending data to an http server to forward to an AMQP server or direct to graphite:
+
+        <LoadPlugin "perl">
+                Globals true
+        </LoadPlugin>
+
+        <Plugin "perl">
+          BaseName "Collectd::Plugins"
+          LoadPlugin "Graphite"
+
+                <Plugin "Graphite">
+                  Buffer "256000"
+                  Prefix "servers"
+                  Method "http"
+                  Host   "http.example.com"
+                  Port   "8080"
+                  Target "post-collectd"
+                </Plugin>
+        </Plugin>
 
 
 NETWORK TRAFFIC

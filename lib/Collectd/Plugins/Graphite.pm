@@ -5,6 +5,9 @@ use warnings;
 
 use IO::Socket;
 
+use HTTP::Request::Common qw(POST);
+use LWP::UserAgent;
+
 use Collectd qw( :all );
 
 =head1 NAME
@@ -88,10 +91,12 @@ my $buff = '';
 my $sock_timeout  = 10;
 
 # config vars.  These can be overridden in collectd.conf
-my $buffer_size   = 8192;
-my $prefix        = 'collectd';
-my $graphite_host = 'localhost';
-my $graphite_port = 2003;
+my $buffer_size     = 8192;
+my $prefix          = 'collectd';
+my $graphite_host   = 'localhost';
+my $graphite_port   = 2003;
+my $graphite_method = 'direct';
+my $graphite_target = 'post-collectd';
 
 
 sub graphite_config {
@@ -109,6 +114,10 @@ sub graphite_config {
             $graphite_host = $val;
         } elsif ( $key =~ /port/i ) {
             $graphite_port = $val;
+        } elsif ( $key =~ /method/i ) {
+            $graphite_method = $val;
+        } elsif ( $key =~ /target/i ) {
+            $graphite_target = $val;
         }
     }
 
@@ -159,17 +168,26 @@ sub graphite_write {
 
 sub send_to_graphite {
      return 0 if length($buff) == 0;
-     my $sock = IO::Socket::INET->new(PeerAddr => $graphite_host,
-                                      PeerPort => $graphite_port,
-                                      Proto    => 'tcp',
-                                      Timeout  => $sock_timeout);
-     unless ($sock) {
-         plugin_log(LOG_ERR, "Graphite.pm: failed to connect to " .
-                             "$graphite_host:$graphite_port : $!");
-         return 0;
+     if ( $graphite_method =~ /direct/i ) {
+         my $sock = IO::Socket::INET->new(PeerAddr => $graphite_host,
+                                          PeerPort => $graphite_port,
+                                          Proto    => 'tcp',
+                                          Timeout  => $sock_timeout);
+         unless ($sock) {
+             plugin_log(LOG_ERR, "Graphite.pm: failed to connect to " .
+                                 "$graphite_host:$graphite_port : $!");
+             return 0;
+         }
+         print $sock $buff;
+         close($sock);
      }
-     print $sock $buff;
-     close($sock);
+     elsif ( $graphite_method =~ /http/i ) {
+         my $userAgent = LWP::UserAgent->new;(agent => 'collectd-perl');
+         my $post      = $userAgent->request(POST "http://$graphite_host:$graphite_port/$graphite_target",
+             Content => $buff
+         );
+         print $post->as_string;
+     }
      $buff = '';
      return 1;
 }
